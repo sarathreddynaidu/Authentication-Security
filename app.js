@@ -1,10 +1,11 @@
 //jshint esversion:6
-require("dotenv").config(); 
+require("dotenv").config();
 const express = require("express");
 const ejs = require("ejs");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
-const encrypt = require("mongoose-encryption");
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
 const encryptedChildren = require("mongoose-encryption/lib/plugins/encrypted-children");
 
 const app = express();
@@ -20,10 +21,6 @@ const userSchema = new mongoose.Schema({
     email: String,
     password: String
 });
-
-//secret
-
-userSchema.plugin(encrypt, {secret: process.env.SECRET, encryptedFields: ["password"]});
 
 //model
 const User = new mongoose.model("User", userSchema);
@@ -41,17 +38,19 @@ app.get("/register", function(req, res){
 });
 
 app.post("/register", function(req, res){
-    const newUser = new User({
-        email: req.body.username,
-        password: req.body.password
-    });
-    newUser.save(function(err){
-        if(err){
-            console.log(err);
-        }
-        else{
-            res.render("secrets");
-        }
+    bcrypt.hash(req.body.password, saltRounds, function(err, hash){
+        const newUser = new User({
+            email: req.body.username,
+            password: hash
+        });
+        newUser.save(function(err){
+            if(err){
+                console.log(err);
+            }
+            else{
+                res.render("secrets");
+            }
+        });
     });
 });
 
@@ -65,12 +64,14 @@ app.post("/login", function(req, res){
         }
         else{
             if(foundUser){
-                if(foundUser.password === password){
-                    res.render("secrets");
-                }
-                else{
-                    res.send("Password didn't match");
-                }
+                bcrypt.compare(password, foundUser.password, function(err, result){
+                    if(result === true ){
+                        res.render("secrets");
+                    }
+                    else{
+                        res.send("Password didn't match");
+                    }
+                });
             }
             else{
                 res.send("User not found");
